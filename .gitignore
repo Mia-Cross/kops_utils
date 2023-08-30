@@ -1,0 +1,5 @@
+.idea
+save_kops*
+.terraform*
+kubeconfig
+TO-DO
