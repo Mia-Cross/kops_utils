@@ -1,0 +1,58 @@
+Plugin: e2e
+Status: failed
+Total: 7069
+Passed: 361
+Failed: 2
+Skipped: 6706
+
+Failed tests:
+[It] [sig-architecture] Conformance Tests should have at least two untainted nodes [Conformance]
+[It] [sig-apps] Daemon set [Serial] should rollback without unnecessary restarts [Conformance]
+
+Plugin: systemd-logs
+Status: passed
+Total: 2
+Passed: 2
+Failed: 0
+Skipped: 0
+
+Run Details:
+API Server version: v1.25.5
+Node health: 2/2 (100%)
+Pods health: 21/22 (95%)
+Details for failed pods:
+sonobuoy/sonobuoy-e2e-job-b85f1ebf43a74361 Ready:False: PodFailed: 
+Errors detected in files:
+Errors:
+1639 podlogs/kube-system/kube-controller-manager-control-plane-fr-par-1-0/logs/kube-controller-manager.txt
+1331 podlogs/kube-system/calico-node-tvl6q/logs/calico-node.txt
+ 859 podlogs/sonobuoy/sonobuoy-e2e-job-b85f1ebf43a74361/logs/e2e.txt
+ 234 podlogs/kube-system/kube-apiserver-control-plane-fr-par-1-0/logs/kube-apiserver.txt
+ 227 podlogs/kube-system/kube-scheduler-control-plane-fr-par-1-0/logs/kube-scheduler.txt
+ 130 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-4vlrw/logs/csi-attacher.txt
+  81 podlogs/kube-system/kube-proxy-nodes-fr-par-1-0/logs/kube-proxy.txt
+  29 podlogs/kube-system/kops-controller-hwbf2/logs/kops-controller.txt
+  27 podlogs/kube-system/kube-proxy-control-plane-fr-par-1-0/logs/kube-proxy.txt
+  14 podlogs/kube-system/calico-node-gkds6/logs/calico-node.txt
+   4 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-4vlrw/logs/csi-provisioner.txt
+   3 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-4vlrw/logs/scaleway-csi-plugin.txt
+   3 podlogs/kube-system/etcd-manager-main-control-plane-fr-par-1-0/logs/etcd-manager.txt
+   3 podlogs/kube-system/etcd-manager-events-control-plane-fr-par-1-0/logs/etcd-manager.txt
+   3 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-4vlrw/logs/csi-snapshotter.txt
+   2 podlogs/kube-system/calico-kube-controllers-7bc879d8d6-gdcd6/logs/calico-kube-controllers.txt
+   1 podlogs/kube-system/scaleway-csi-node-5c8cp/logs/csi-node-driver-registrar.txt
+Warnings:
+1115 podlogs/kube-system/etcd-manager-main-control-plane-fr-par-1-0/logs/etcd-manager.txt
+ 737 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-4vlrw/logs/csi-resizer.txt
+ 725 podlogs/kube-system/kube-controller-manager-control-plane-fr-par-1-0/logs/kube-controller-manager.txt
+ 122 podlogs/kube-system/kube-apiserver-control-plane-fr-par-1-0/logs/kube-apiserver.txt
+  75 podlogs/kube-system/kube-scheduler-control-plane-fr-par-1-0/logs/kube-scheduler.txt
+  31 podlogs/sonobuoy/sonobuoy-e2e-job-b85f1ebf43a74361/logs/e2e.txt
+  28 podlogs/kube-system/kube-proxy-nodes-fr-par-1-0/logs/kube-proxy.txt
+  17 podlogs/kube-system/etcd-manager-events-control-plane-fr-par-1-0/logs/etcd-manager.txt
+   8 podlogs/kube-system/scaleway-cloud-controller-manager-67869c97f-9sgq7/logs/scaleway-cloud-controller-manager.txt
+   7 podlogs/kube-system/kube-proxy-control-plane-fr-par-1-0/logs/kube-proxy.txt
+   3 podlogs/kube-system/calico-node-gkds6/logs/calico-node.txt
+   1 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-4vlrw/logs/csi-provisioner.txt
+   1 podlogs/kube-system/calico-kube-controllers-7bc879d8d6-gdcd6/logs/calico-kube-controllers.txt
+   1 podlogs/sonobuoy/sonobuoy/logs/kube-sonobuoy.txt

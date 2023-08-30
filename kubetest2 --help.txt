@@ -1,0 +1,52 @@
+# kubetest2 kops --help
+Usage:
+  kubetest2 kops [Flags] [DeployerFlags] -- [TesterArgs]
+
+Flags:
+      --artifacts string         top-level directory to put artifacts under for each kubetest2 run, defaulting to "${ARTIFACTS:-./_artifacts}". If using the ginkgo tester, this must be an absolute path. (default "/kops/_artifacts")
+      --build                    build kubernetes
+      --down                     tear down the test cluster
+  -h, --help                     display help
+      --run-id string            unique identifier for a kubetest2 run (default "8c479511-0952-408e-b374-4654fd3d6512")
+      --rundir string            directory to put run related test binaries like e2e.test, ginkgo, kubectl for each kubetest2 run, defaulting to "${KUBETEST2_RUN_DIR:-./_rundir}". If using the ginkgo tester, this must be an absolute path.
+      --rundir-in-artifacts      if true, the test binaries and run specific metadata will be in the ARTIFACTS
+      --skip-test-junit-report   skip reporting the test step as a JUnit test case, should be set to true when solely relying on the tester binary to generate it's own junit.
+      --test string              test type to run, if unset no tests will run
+      --up                       provision the test cluster
+
+DeployerFlags(kops):
+      --add_dir_header                                   If true, adds the file directory to the header of the log messages
+      --admin-access string                              The CIDR to restrict kubernetes API access
+      --alsologtostderr                                  log to standard error as well as files (no effect when -logtostderr=true)
+      --cloud-provider string                            Which cloud provider to use
+      --cluster-name string                              The FQDN to use for the cluster name
+      --control-plane-instance-group-overrides strings   overrides for the control plane instance groups (default [])
+      --control-plane-size int                           Number of control plane instances
+      --create-args string                               Extra space-separated arguments passed to 'kops create cluster'
+      --env strings                                      Additional env vars to set for kops commands in NAME=VALUE format (default [])
+      --gcp-project string                               Which GCP Project to use when --cloud-provider=gce
+      --kops-binary-path string                          The path to kops executable used for testing
+      --kops-root string                                 Path to root of the kops repo. Used with --build.
+      --kops-version-marker string                       The URL to the kops version marker. Conflicts with --build and --kops-binary-path
+      --kubernetes-version string                        The kubernetes version to use in the cluster
+      --log_backtrace_at traceLocation                   when logging hits line file:N, emit a stack trace (default :0)
+      --log_dir string                                   If non-empty, write log files in this directory (no effect when -logtostderr=true)
+      --log_file string                                  If non-empty, use this log file (no effect when -logtostderr=true)
+      --log_file_max_size uint                           Defines the maximum size a log file can grow to (no effect when -logtostderr=true). Unit is megabytes. If the value is 0, the maximum file size is unlimited. (default 1800)
+      --logtostderr                                      log to standard error instead of files (default true)
+      --node-instance-group-overrides strings            overrides for the node instance groups (default [])
+      --one_output                                       If true, only write logs to their native severity level (vs also writing to each lower severity level; no effect when -logtostderr=true)
+      --publish-version-marker string                    The GCS path to which the --kops-version-marker is uploaded if the tests pass
+      --skip_headers                                     If true, avoid header prefixes in the log messages
+      --skip_log_headers                                 If true, avoid headers when opening log files (no effect when -logtostderr=true)
+      --ssh-private-key string                           The path to the private key used for SSH access to instances
+      --ssh-public-key string                            The path to the public key passed to the cloud provider
+      --ssh-user string                                  The SSH user to use for SSH access to instances
+      --stage-location string                            Storage location for kops artifacts. Only gs:// paths are supported.
+      --stderrthreshold severity                         logs at or above this threshold go to stderr when writing to files and stderr (no effect when -logtostderr=true or -alsologtostderr=false) (default 2)
+      --template-path string                             The path to the manifest template used for cluster creation
+      --terraform-version string                         The version of terraform to use for applying the cluster
+  -v, --v Level                                          number for the log level verbosity
+      --validation-wait duration                         time to wait for newly created cluster to pass validation (default 0s)
+      --vmodule moduleSpec                               comma-separated list of pattern=N settings for file-filtered logging
+

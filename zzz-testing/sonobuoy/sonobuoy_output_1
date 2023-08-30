@@ -1,0 +1,56 @@
+Plugin: e2e
+Status: failed
+Total: 7069
+Passed: 359
+Failed: 4
+Skipped: 6706
+
+Failed tests:
+[It] [sig-auth] ServiceAccounts should mount an API token into pods  [Conformance]
+[It] [sig-network] HostPort validates that there is no conflict between pods with same hostPort but different hostIP and protocol [LinuxOnly] [Conformance]
+[It] [sig-apps] Daemon set [Serial] should rollback without unnecessary restarts [Conformance]
+[It] [sig-architecture] Conformance Tests should have at least two untainted nodes [Conformance]
+
+Plugin: systemd-logs
+Status: passed
+Total: 2
+Passed: 2
+Failed: 0
+Skipped: 0
+
+Run Details:
+API Server version: v1.25.5
+Node health: 2/2 (100%)
+Pods health: 19/20 (95%)
+Details for failed pods:
+sonobuoy/sonobuoy-e2e-job-d3102896f8e14c72 Ready:False: PodFailed: 
+Errors detected in files:
+Errors:
+1677 podlogs/kube-system/kube-controller-manager-control-plane-fr-par-1-0/logs/kube-controller-manager.txt
+ 897 podlogs/sonobuoy/sonobuoy-e2e-job-d3102896f8e14c72/logs/e2e.txt
+ 498 podlogs/kube-system/cilium-s49kw/logs/cilium-agent.txt
+ 300 podlogs/kube-system/kube-scheduler-control-plane-fr-par-1-0/logs/kube-scheduler.txt
+ 167 podlogs/kube-system/kube-apiserver-control-plane-fr-par-1-0/logs/kube-apiserver.txt
+ 114 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-sfnn8/logs/csi-attacher.txt
+  29 podlogs/kube-system/dns-controller-56b8b99d88-8j8h4/logs/dns-controller.txt
+  23 podlogs/kube-system/kops-controller-ndd4r/logs/kops-controller.txt
+   5 podlogs/kube-system/cilium-tqzcr/logs/cilium-agent.txt
+   4 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-sfnn8/logs/csi-provisioner.txt
+   3 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-sfnn8/logs/csi-snapshotter.txt
+   2 podlogs/kube-system/etcd-manager-events-control-plane-fr-par-1-0/logs/etcd-manager.txt
+   2 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-sfnn8/logs/scaleway-csi-plugin.txt
+   1 podlogs/kube-system/scaleway-csi-node-59n75/logs/csi-node-driver-registrar.txt
+   1 podlogs/kube-system/coredns-autoscaler-5b9dc8bb99-svgkp/logs/autoscaler.txt
+Warnings:
+742 podlogs/kube-system/kube-controller-manager-control-plane-fr-par-1-0/logs/kube-controller-manager.txt
+645 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-sfnn8/logs/csi-resizer.txt
+491 podlogs/kube-system/cilium-s49kw/logs/cilium-agent.txt
+447 podlogs/kube-system/etcd-manager-main-control-plane-fr-par-1-0/logs/etcd-manager.txt
+129 podlogs/kube-system/kube-scheduler-control-plane-fr-par-1-0/logs/kube-scheduler.txt
+ 94 podlogs/kube-system/kube-apiserver-control-plane-fr-par-1-0/logs/kube-apiserver.txt
+ 31 podlogs/sonobuoy/sonobuoy-e2e-job-d3102896f8e14c72/logs/e2e.txt
+ 20 podlogs/kube-system/etcd-manager-events-control-plane-fr-par-1-0/logs/etcd-manager.txt
+ 11 podlogs/kube-system/cilium-tqzcr/logs/cilium-agent.txt
+  7 podlogs/kube-system/scaleway-cloud-controller-manager-67869c97f-zczgg/logs/scaleway-cloud-controller-manager.txt
+  1 podlogs/sonobuoy/sonobuoy/logs/kube-sonobuoy.txt
+  1 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-sfnn8/logs/csi-provisioner.txt

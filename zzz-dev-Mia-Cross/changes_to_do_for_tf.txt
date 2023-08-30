@@ -1,0 +1,776 @@
+ # scaleway_instance_server.control-plane-fr-par-1-0 will be updated in-place
+  ~ resource "scaleway_instance_server" "control-plane-fr-par-1-0" {
+        id                    = "fr-par-1/4ac23f2e-cc73-4ea0-a220-5d96b0b3ca25"
+        name                  = "control-plane-fr-par-1-0"
+        tags                  = [
+            "noprefix=kops.k8s.io/cluster=paris.nonedns",
+            "noprefix=kops.k8s.io/instance-group=control-plane-fr-par-1",
+            "noprefix=kops.k8s.io/role=ControlPlane",
+            "noprefix=kops.k8s.io/needs-update",
+        ]
+      ~ user_data             = {
+          ~ "cloud-init" = <<-EOT
+                #!/bin/bash
+                set -o errexit
+                set -o nounset
+                set -o pipefail
+                
+                NODEUP_URL_AMD64=https://s3.fr-par.scw.cloud/kops-images/kops/1.28.0-alpha.1/linux/amd64/nodeup
+                NODEUP_HASH_AMD64=146d805e7ae4794474200c4a8ca303a62ffbbd9e5028bf8f7d969d99b5d5fcab
+                NODEUP_URL_ARM64=
+                NODEUP_HASH_ARM64=
+                
+                export S3_ACCESS_KEY_ID=************************
+                export S3_ENDPOINT=https://s3.fr-par.scw.cloud
+                export S3_REGION=fr-par
+                export S3_SECRET_ACCESS_KEY=*************************************
+                export SCW_ACCESS_KEY=************************
+                export SCW_DEFAULT_PROJECT_ID=*************************************
+                export SCW_SECRET_KEY=*************************************
+                
+                
+                
+                
+                sysctl -w net.core.rmem_max=16777216 || true
+                sysctl -w net.core.wmem_max=16777216 || true
+                sysctl -w net.ipv4.tcp_rmem='4096 87380 16777216' || true
+                sysctl -w net.ipv4.tcp_wmem='4096 87380 16777216' || true
+                
+                
+                function ensure-install-dir() {
+                  INSTALL_DIR="/opt/kops"
+                  # On ContainerOS, we install under /var/lib/toolbox; /opt is ro and noexec
+                  if [[ -d /var/lib/toolbox ]]; then
+                    INSTALL_DIR="/var/lib/toolbox/kops"
+                  fi
+                  mkdir -p ${INSTALL_DIR}/bin
+                  mkdir -p ${INSTALL_DIR}/conf
+                  cd ${INSTALL_DIR}
+                }
+                
+                # Retry a download until we get it. args: name, sha, urls
+                download-or-bust() {
+                  local -r file="$1"
+                  local -r hash="$2"
+                  local -r urls=( $(split-commas "$3") )
+                
+                  if [[ -f "${file}" ]]; then
+                    if ! validate-hash "${file}" "${hash}"; then
+                      rm -f "${file}"
+                    else
+                      return 0
+                    fi
+                  fi
+                
+                  while true; do
+                    for url in "${urls[@]}"; do
+                      commands=(
+                        "curl -f --compressed -Lo "${file}" --connect-timeout 20 --retry 6 --retry-delay 10"
+                        "wget --compression=auto -O "${file}" --connect-timeout=20 --tries=6 --wait=10"
+                        "curl -f -Lo "${file}" --connect-timeout 20 --retry 6 --retry-delay 10"
+                        "wget -O "${file}" --connect-timeout=20 --tries=6 --wait=10"
+                      )
+                      for cmd in "${commands[@]}"; do
+                        echo "Attempting download with: ${cmd} {url}"
+                        if ! (${cmd} "${url}"); then
+                          echo "== Download failed with ${cmd} =="
+                          continue
+                        fi
+                        if ! validate-hash "${file}" "${hash}"; then
+                          echo "== Hash validation of ${url} failed. Retrying. =="
+                          rm -f "${file}"
+                        else
+                          echo "== Downloaded ${url} (SHA256 = ${hash}) =="
+                          return 0
+                        fi
+                      done
+                    done
+                
+                    echo "All downloads failed; sleeping before retrying"
+                    sleep 60
+                  done
+                }
+                
+                validate-hash() {
+                  local -r file="$1"
+                  local -r expected="$2"
+                  local actual
+                
+                  actual=$(sha256sum ${file} | awk '{ print $1 }') || true
+                  if [[ "${actual}" != "${expected}" ]]; then
+                    echo "== ${file} corrupted, hash ${actual} doesn't match expected ${expected} =="
+                    return 1
+                  fi
+                }
+                
+                function split-commas() {
+                  echo $1 | tr "," "\n"
+                }
+                
+                function download-release() {
+                  case "$(uname -m)" in
+                  x86_64*|i?86_64*|amd64*)
+                    NODEUP_URL="${NODEUP_URL_AMD64}"
+                    NODEUP_HASH="${NODEUP_HASH_AMD64}"
+                    ;;
+                  aarch64*|arm64*)
+                    NODEUP_URL="${NODEUP_URL_ARM64}"
+                    NODEUP_HASH="${NODEUP_HASH_ARM64}"
+                    ;;
+                  *)
+                    echo "Unsupported host arch: $(uname -m)" >&2
+                    exit 1
+                    ;;
+                  esac
+                
+                  cd ${INSTALL_DIR}/bin
+                  download-or-bust nodeup "${NODEUP_HASH}" "${NODEUP_URL}"
+                
+                  chmod +x nodeup
+                
+                  echo "Running nodeup"
+                  # We can't run in the foreground because of https://github.com/docker/docker/issues/23793
+                  ( cd ${INSTALL_DIR}/bin; ./nodeup --install-systemd-unit --conf=${INSTALL_DIR}/conf/kube_env.yaml --v=8  )
+                }
+                
+                ####################################################################################
+                
+                /bin/systemd-machine-id-setup || echo "failed to set up ensure machine-id configured"
+                
+                echo "== nodeup node config starting =="
+                ensure-install-dir
+                
+                cat > conf/cluster_spec.yaml << '__EOF_CLUSTER_SPEC'
+                cloudConfig:
+                  manageStorageClasses: true
+                encryptionConfig: null
+                etcdClusters:
+                  events:
+                    cpuRequest: 100m
+                    manager:
+                      backupRetentionDays: 90
+                    memoryRequest: 100Mi
+                    version: 3.5.9
+                  main:
+                    cpuRequest: 200m
+                    manager:
+                      backupRetentionDays: 90
+                    memoryRequest: 100Mi
+                    version: 3.5.9
+                kubeAPIServer:
+                  allowPrivileged: true
+                  anonymousAuth: false
+                  apiAudiences:
+                  - kubernetes.svc.default
+                  apiServerCount: 1
+                  authorizationMode: Node,RBAC
+                  bindAddress: 0.0.0.0
+                  cloudProvider: external
+                  enableAdmissionPlugins:
+                  - NamespaceLifecycle
+                  - LimitRanger
+                  - ServiceAccount
+                  - DefaultStorageClass
+                  - DefaultTolerationSeconds
+                  - MutatingAdmissionWebhook
+                  - ValidatingAdmissionWebhook
+                  - NodeRestriction
+                  - ResourceQuota
+                  etcdServers:
+                  - https://127.0.0.1:4001
+                  etcdServersOverrides:
+                  - /events#https://127.0.0.1:4002
+                  image: registry.k8s.io/kube-apiserver:v1.27.3
+                  kubeletPreferredAddressTypes:
+                  - InternalIP
+                  - Hostname
+                  - ExternalIP
+                  logLevel: 2
+                  requestheaderAllowedNames:
+                  - aggregator
+                  requestheaderExtraHeaderPrefixes:
+                  - X-Remote-Extra-
+                  requestheaderGroupHeaders:
+                  - X-Remote-Group
+                  requestheaderUsernameHeaders:
+                  - X-Remote-User
+                  securePort: 443
+                  serviceAccountIssuer: https://api.internal.paris.nonedns
+                  serviceAccountJWKSURI: https://api.internal.paris.nonedns/openid/v1/jwks
+                  serviceClusterIPRange: 100.64.0.0/13
+                  storageBackend: etcd3
+                kubeControllerManager:
+                  allocateNodeCIDRs: true
+                  attachDetachReconcileSyncPeriod: 1m0s
+                  cloudProvider: external
+                  clusterCIDR: 100.96.0.0/11
+                  clusterName: paris.nonedns
+                  configureCloudRoutes: false
+                  image: registry.k8s.io/kube-controller-manager:v1.27.3
+                  leaderElection:
+                    leaderElect: true
+                  logLevel: 2
+                  useServiceAccountCredentials: true
+                kubeScheduler:
+                  image: registry.k8s.io/kube-scheduler:v1.27.3
+                  leaderElection:
+                    leaderElect: true
+                  logLevel: 2
+                kubelet:
+                  anonymousAuth: false
+                  cgroupDriver: systemd
+                  cgroupRoot: /
+                  cloudProvider: external
+                  clusterDNS: 100.64.0.10
+                  clusterDomain: cluster.local
+                  enableDebuggingHandlers: true
+                  evictionHard: memory.available<100Mi,nodefs.available<10%,nodefs.inodesFree<5%,imagefs.available<10%,imagefs.inodesFree<5%
+                  kubeconfigPath: /var/lib/kubelet/kubeconfig
+                  logLevel: 2
+                  podInfraContainerImage: registry.k8s.io/pause:3.9
+                  podManifestPath: /etc/kubernetes/manifests
+                  protectKernelDefaults: true
+                  registerSchedulable: true
+                  shutdownGracePeriod: 30s
+                  shutdownGracePeriodCriticalPods: 10s
+                masterKubelet:
+                  anonymousAuth: false
+                  cgroupDriver: systemd
+                  cgroupRoot: /
+                  cloudProvider: external
+                  clusterDNS: 100.64.0.10
+                  clusterDomain: cluster.local
+                  enableDebuggingHandlers: true
+                  evictionHard: memory.available<100Mi,nodefs.available<10%,nodefs.inodesFree<5%,imagefs.available<10%,imagefs.inodesFree<5%
+                  kubeconfigPath: /var/lib/kubelet/kubeconfig
+                  logLevel: 2
+                  podInfraContainerImage: registry.k8s.io/pause:3.9
+                  podManifestPath: /etc/kubernetes/manifests
+                  protectKernelDefaults: true
+                  registerSchedulable: true
+                  shutdownGracePeriod: 30s
+                  shutdownGracePeriodCriticalPods: 10s
+                
+                __EOF_CLUSTER_SPEC
+                
+                cat > conf/kube_env.yaml << '__EOF_KUBE_ENV'
+@@            + APIServerIPs:
+@@            + - 51.159.75.99
+                CloudProvider: scaleway
+                ClusterName: paris.nonedns
+                ConfigBase: scw://kops-state-store/paris.nonedns
+                InstanceGroupName: control-plane-fr-par-1
+                InstanceGroupRole: ControlPlane
+@@            - NodeupConfigHash: FoUtZ1Nc97eTraasnBFvRsEYGWIYTTSBXhi67fLRAV8=
+@@            + NodeupConfigHash: JkXjz9G63kZZ/r7YzGk9D6ai6KzU++UYryl1A/gGtDU=
+                
+                __EOF_KUBE_ENV
+                
+                download-release
+                echo "== nodeup node config done =="
+            EOT
+        }
+        # (16 unchanged attributes hidden)
+
+        # (1 unchanged block hidden)
+    }
+    
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+
+  # scaleway_instance_server.nodes-fr-par-1-0 will be updated in-place
+  ~ resource "scaleway_instance_server" "nodes-fr-par-1-0" {
+        id                    = "fr-par-1/a01232f6-4bba-4a40-9afa-472e44e6c3ac"
+        name                  = "nodes-fr-par-1-0"
+        tags                  = [
+            "noprefix=kops.k8s.io/cluster=paris.nonedns",
+            "noprefix=kops.k8s.io/instance-group=nodes-fr-par-1",
+            "noprefix=kops.k8s.io/needs-update",
+        ]
+      ~ user_data             = {
+          ~ "cloud-init" = <<-EOT
+                #!/bin/bash
+                set -o errexit
+                set -o nounset
+                set -o pipefail
+                
+                NODEUP_URL_AMD64=https://s3.fr-par.scw.cloud/kops-images/kops/1.28.0-alpha.1/linux/amd64/nodeup
+                NODEUP_HASH_AMD64=146d805e7ae4794474200c4a8ca303a62ffbbd9e5028bf8f7d969d99b5d5fcab
+                NODEUP_URL_ARM64=
+                NODEUP_HASH_ARM64=
+                
+                
+                
+                
+                
+                sysctl -w net.core.rmem_max=16777216 || true
+                sysctl -w net.core.wmem_max=16777216 || true
+                sysctl -w net.ipv4.tcp_rmem='4096 87380 16777216' || true
+                sysctl -w net.ipv4.tcp_wmem='4096 87380 16777216' || true
+                
+                
+                function ensure-install-dir() {
+                  INSTALL_DIR="/opt/kops"
+                  # On ContainerOS, we install under /var/lib/toolbox; /opt is ro and noexec
+                  if [[ -d /var/lib/toolbox ]]; then
+                    INSTALL_DIR="/var/lib/toolbox/kops"
+                  fi
+                  mkdir -p ${INSTALL_DIR}/bin
+                  mkdir -p ${INSTALL_DIR}/conf
+                  cd ${INSTALL_DIR}
+                }
+                
+                # Retry a download until we get it. args: name, sha, urls
+                download-or-bust() {
+                  local -r file="$1"
+                  local -r hash="$2"
+                  local -r urls=( $(split-commas "$3") )
+                
+                  if [[ -f "${file}" ]]; then
+                    if ! validate-hash "${file}" "${hash}"; then
+                      rm -f "${file}"
+                    else
+                      return 0
+                    fi
+                  fi
+                
+                  while true; do
+                    for url in "${urls[@]}"; do
+                      commands=(
+                        "curl -f --compressed -Lo "${file}" --connect-timeout 20 --retry 6 --retry-delay 10"
+                        "wget --compression=auto -O "${file}" --connect-timeout=20 --tries=6 --wait=10"
+                        "curl -f -Lo "${file}" --connect-timeout 20 --retry 6 --retry-delay 10"
+                        "wget -O "${file}" --connect-timeout=20 --tries=6 --wait=10"
+                      )
+                      for cmd in "${commands[@]}"; do
+                        echo "Attempting download with: ${cmd} {url}"
+                        if ! (${cmd} "${url}"); then
+                          echo "== Download failed with ${cmd} =="
+                          continue
+                        fi
+                        if ! validate-hash "${file}" "${hash}"; then
+                          echo "== Hash validation of ${url} failed. Retrying. =="
+                          rm -f "${file}"
+                        else
+                          echo "== Downloaded ${url} (SHA256 = ${hash}) =="
+                          return 0
+                        fi
+                      done
+                    done
+                
+                    echo "All downloads failed; sleeping before retrying"
+                    sleep 60
+                  done
+                }
+                
+                validate-hash() {
+                  local -r file="$1"
+                  local -r expected="$2"
+                  local actual
+                
+                  actual=$(sha256sum ${file} | awk '{ print $1 }') || true
+                  if [[ "${actual}" != "${expected}" ]]; then
+                    echo "== ${file} corrupted, hash ${actual} doesn't match expected ${expected} =="
+                    return 1
+                  fi
+                }
+                
+                function split-commas() {
+                  echo $1 | tr "," "\n"
+                }
+                
+                function download-release() {
+                  case "$(uname -m)" in
+                  x86_64*|i?86_64*|amd64*)
+                    NODEUP_URL="${NODEUP_URL_AMD64}"
+                    NODEUP_HASH="${NODEUP_HASH_AMD64}"
+                    ;;
+                  aarch64*|arm64*)
+                    NODEUP_URL="${NODEUP_URL_ARM64}"
+                    NODEUP_HASH="${NODEUP_HASH_ARM64}"
+                    ;;
+                  *)
+                    echo "Unsupported host arch: $(uname -m)" >&2
+                    exit 1
+                    ;;
+                  esac
+                
+                  cd ${INSTALL_DIR}/bin
+                  download-or-bust nodeup "${NODEUP_HASH}" "${NODEUP_URL}"
+                
+                  chmod +x nodeup
+                
+                  echo "Running nodeup"
+                  # We can't run in the foreground because of https://github.com/docker/docker/issues/23793
+                  ( cd ${INSTALL_DIR}/bin; ./nodeup --install-systemd-unit --conf=${INSTALL_DIR}/conf/kube_env.yaml --v=8  )
+                }
+                
+                ####################################################################################
+                
+                /bin/systemd-machine-id-setup || echo "failed to set up ensure machine-id configured"
+                
+                echo "== nodeup node config starting =="
+                ensure-install-dir
+                
+                cat > conf/cluster_spec.yaml << '__EOF_CLUSTER_SPEC'
+                cloudConfig:
+                  manageStorageClasses: true
+                kubelet:
+                  anonymousAuth: false
+                  cgroupDriver: systemd
+                  cgroupRoot: /
+                  cloudProvider: external
+                  clusterDNS: 100.64.0.10
+                  clusterDomain: cluster.local
+                  enableDebuggingHandlers: true
+                  evictionHard: memory.available<100Mi,nodefs.available<10%,nodefs.inodesFree<5%,imagefs.available<10%,imagefs.inodesFree<5%
+                  kubeconfigPath: /var/lib/kubelet/kubeconfig
+                  logLevel: 2
+                  podInfraContainerImage: registry.k8s.io/pause:3.9
+                  podManifestPath: /etc/kubernetes/manifests
+                  protectKernelDefaults: true
+                  registerSchedulable: true
+                  shutdownGracePeriod: 30s
+                  shutdownGracePeriodCriticalPods: 10s
+                
+                __EOF_CLUSTER_SPEC
+                
+                cat > conf/kube_env.yaml << '__EOF_KUBE_ENV'
+@@            + APIServerIPs:
+@@            + - 51.159.75.99
+                CloudProvider: scaleway
+                ClusterName: paris.nonedns
+                ConfigServer:
+                  CACertificates: |
+                    -----BEGIN CERTIFICATE-----
+                    MIIC+DCCAeCgAwIBAgIMF3NEbWAlZCkMha2VMA0GCSqGSIb3DQEBCwUAMBgxFjAU
+                    BgNVBAMTDWt1YmVybmV0ZXMtY2EwHhcNMjMwNzE3MTIyNTIxWhcNMzMwNzE2MTIy
+                    NTIxWjAYMRYwFAYDVQQDEw1rdWJlcm5ldGVzLWNhMIIBIjANBgkqhkiG9w0BAQEF
+                    AAOCAQ8AMIIBCgKCAQEAmDtkKaRyQH54oRAcQFQuEE/XvM8dZNAcTOqo2UwLuvkR
+                    5bOx2LkXsypZpr1mhaI5i7RU9FT3dheZNKd8Dy2oxzWFCnNGnx9GvyXc1imrAMoP
+                    HXOrpyxjjKkgXHDhGBpb9qliY1IyR5k1NbKw5AOh+0yq6OBESHfE3jyM1ccl4h23
+                    29/EjNfbwJrj2CDkyVUZilEo8HDlllwKkivydfdzz9C0On2fL6cQjF8Bg9TC+P/i
+                    WOv2iHscpw0OhMC8sX3GgO5mLN74/LqyyjDw4J0gyVLr8X+hCq2YBngJAXDePgeE
+                    S5h70bLhtntjvR63J+F9namtW/UrFNTw0vttcWApxQIDAQABo0IwQDAOBgNVHQ8B
+                    Af8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUDbAlIiHSRZgRQi3f
+                    s63dC8RRsYgwDQYJKoZIhvcNAQELBQADggEBAIPekjNkZsd5izcmLo+pO/W+geOs
+                    7StGxV2SdLX0qxGaNj5w8wfVyw1OIpBw17s7/D7IzDrBu7SufS7AukvRqaj5cRAx
+                    b9D2565mfXG7ah0u14nt6XEnPuFy+q/Col6CVA4Qu0OZ6Jb/1f5fIutLHi+jBEta
+                    NM8sXP3pM3BKFS5TXIU20Jz2eOynvQb5zuSA2JVpDZW2xefLL0HYq6WCnUQR9A+m
+                    FFh9+Q14m2e7NOnEL/pmA1SmPxrpMihH6uwE+Gobp0o5SdZHHYmxgTksMnYxaKtu
+                    L3cNZ/rTI1NoRksXpbMbIy6Kj8CD+VFsLedeUjeFWqNiWCG/ag64eomHh0A=
+                    -----END CERTIFICATE-----
+                  servers:
+@@            -   - https://kops-controller.internal.paris.nonedns:3988/
+@@            +   - https://51.159.75.99:3988/
+                InstanceGroupName: nodes-fr-par-1
+                InstanceGroupRole: Node
+                NodeupConfigHash: 01EWv/rCzwDH/sQPuuXXRxTGtq2Vy7JkX2I9IfB5Jq4=
+                
+                __EOF_KUBE_ENV
+                
+                download-release
+                echo "== nodeup node config done =="
+            EOT
+        }
+        # (16 unchanged attributes hidden)
+
+        # (1 unchanged block hidden)
+    }
+    
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@    
+
+  # scaleway_object.nodeupconfig-control-plane-fr-par-1 will be updated in-place
+  ~ resource "scaleway_object" "nodeupconfig-control-plane-fr-par-1" {
+      ~ content    = <<-EOT
+            APIServerConfig:
+              KubeAPIServer:
+                allowPrivileged: true
+                anonymousAuth: false
+                apiAudiences:
+                - kubernetes.svc.default
+                apiServerCount: 1
+                authorizationMode: Node,RBAC
+                bindAddress: 0.0.0.0
+                cloudProvider: external
+                enableAdmissionPlugins:
+                - NamespaceLifecycle
+                - LimitRanger
+                - ServiceAccount
+                - DefaultStorageClass
+                - DefaultTolerationSeconds
+                - MutatingAdmissionWebhook
+                - ValidatingAdmissionWebhook
+                - NodeRestriction
+                - ResourceQuota
+                etcdServers:
+                - https://127.0.0.1:4001
+                etcdServersOverrides:
+                - /events#https://127.0.0.1:4002
+                image: registry.k8s.io/kube-apiserver:v1.27.3
+                kubeletPreferredAddressTypes:
+                - InternalIP
+                - Hostname
+                - ExternalIP
+                logLevel: 2
+                requestheaderAllowedNames:
+                - aggregator
+                requestheaderExtraHeaderPrefixes:
+                - X-Remote-Extra-
+                requestheaderGroupHeaders:
+                - X-Remote-Group
+                requestheaderUsernameHeaders:
+                - X-Remote-User
+                securePort: 443
+                serviceAccountIssuer: https://api.internal.paris.nonedns
+                serviceAccountJWKSURI: https://api.internal.paris.nonedns/openid/v1/jwks
+                serviceClusterIPRange: 100.64.0.0/13
+                storageBackend: etcd3
+              ServiceAccountPublicKeys: |
+                -----BEGIN RSA PUBLIC KEY-----
+                MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv6NEnsDnGYCGwq0PM+fm
+                fF8tV7qpjh/5XAu9Vzvx7PVufkcf1H15Qf7/GDjvLP0Bd2dVgU7xGPaw6/CAZ8jn
+                XfLKs3vH3dFTp9pzwm2gzczrhDZXiXO0n1idZfRiCd9RtT3Ijn6RHeuPRnfpvMuD
+                LJAHs/uCtMnCYt4vgTCSAWu4Fpm7V1hRPPFroT+/G7f7MPjS7ZHRzHBhPc9YeBE4
+                L2zPuvQh8YguVohhG/Q7sjz9zBfH4mUbFKxJSEBjP5yUjBb35JMB3yqz3Z3Kl0Vg
+                Kyoprdh8AnQpu/zq1ftWE8Oimaca91KNkjxoD1XKS+E2SGZg2uX1teB602EBBZoL
+                3wIDAQAB
+                -----END RSA PUBLIC KEY-----
+@@        + ApiserverAdditionalIPs:
+@@        + - 51.159.75.99
+            Assets:
+              amd64:
+              - c0e18da6a55830cf4910ecd7261597c66ea3f8f58cf44d4adb6bdcb6e2e6f0bf@https://dl.k8s.io/release/v1.27.3/bin/linux/amd64/kubelet
+              - fba6c062e754a120bc8105cde1344de200452fe014a8759e06e4eec7ed258a09@https://dl.k8s.io/release/v1.27.3/bin/linux/amd64/kubectl
+              - f3a841324845ca6bf0d4091b4fc7f97e18a623172158b72fc3fdcdb9d42d2d37@https://storage.googleapis.com/k8s-artifacts-cni/release/v1.2.0/cni-plugins-linux-amd64-v1.2.0.tgz
+              - 2755c70152ab40856510b4549c2dd530e15f5355eb7bf82868e813c9380e22a7@https://github.com/containerd/containerd/releases/download/v1.7.2/containerd-1.7.2-linux-amd64.tar.gz
+              - c3aadb419e5872af49504b6de894055251d2e685fddddb981a79703e7f895cbd@https://github.com/opencontainers/runc/releases/download/v1.1.7/runc.amd64
+              - 3c066f3ff6b54acb76f4ef069e32d399967531a4cc01d84daf0460b388c5e7a2@https://s3.fr-par.scw.cloud/kops-images/kops/1.28.0-alpha.1/linux/amd64/protokube
+              - e847737eebff1c539ca98fd907dd3752f3a14b76833fc9e5b1f31a7c4ebafb38@https://s3.fr-par.scw.cloud/kops-images/kops/1.28.0-alpha.1/linux/amd64/channels
+            CAs:
+              apiserver-aggregator-ca: |
+                -----BEGIN CERTIFICATE-----
+                MIIDDDCCAfSgAwIBAgIMF3NEbV3MEnxlnuP+MA0GCSqGSIb3DQEBCwUAMCIxIDAe
+                BgNVBAMTF2FwaXNlcnZlci1hZ2dyZWdhdG9yLWNhMB4XDTIzMDcxNzEyMjUyMVoX
+                DTMzMDcxNjEyMjUyMVowIjEgMB4GA1UEAxMXYXBpc2VydmVyLWFnZ3JlZ2F0b3It
+                Y2EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC3DSyg6Nr4D0BrP+kR
+                vVVYtIPSV7otKHzRV5hZ1XZQcYpCkyt2AoLGqeDVe6sYMcC1wX5QXGcV4DrkZeNc
+                fbktPK0k0NHqdwM8+fT1kzxrLGydlxMn0B05Lzm84oK+m2/9raAMkBevu0E40I+9
+                fCsyqrP4JdcejsjdOkoImIq23EPqbBhIoLqZhS+QGAtVJdLahuto9kBMHy4setiT
+                yVI3k/iHa6rNx5xNoKoJKf+UDRb874tXXFhmNovxr3G9ruE1Sz4UOvyMQXbz1T2k
+                DXZn4yzHr8nRdk5AQTFJV1EitOnx5Ml+6aUK0TVZw+ykSDJXVkDkR5Ho11a4WTWl
+                rgrRAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0G
+                A1UdDgQWBBT2yTgz7J7JEeNTeOCvSj02IVFWwzANBgkqhkiG9w0BAQsFAAOCAQEA
+                Ax9aX5PRW/aNq5bEwbLoNrDwc6B0XuiIrvHiidEowOCqfHn+wdrXzZvLJjZQeCaJ
+                vdG43wW+B8p4a8DCUsjFupp3LZMTpEPFdsMCBcywljKtl8tE91to5WceHrdkbemS
+                KYvY8/9aL8ggpPBk0+SBn2fIGDNUSTv3yK6Arc2fRm3r2MVmVEI1tNhRPtoqJS2G
+                4tE3vlj0rmQqf8IhelCJKTFqhBRjXuw+lxhP0Bf5YCa2TL4iQESiFfYbLrpAnxiT
+                dbooqpuAnkbn1S7jsZxFHelgnDqZ5eqzfJg4IIXs0ePiEm4dThf772H/pTmbYtVP
+                du0RQ+rqL8FZD2B+LiKHUA==
+                -----END CERTIFICATE-----
+              etcd-clients-ca: |
+                -----BEGIN CERTIFICATE-----
+                MIIC/DCCAeSgAwIBAgIMF3NEbVf+QkWc7i7bMA0GCSqGSIb3DQEBCwUAMBoxGDAW
+                BgNVBAMTD2V0Y2QtY2xpZW50cy1jYTAeFw0yMzA3MTcxMjI1MjFaFw0zMzA3MTYx
+                MjI1MjFaMBoxGDAWBgNVBAMTD2V0Y2QtY2xpZW50cy1jYTCCASIwDQYJKoZIhvcN
+                AQEBBQADggEPADCCAQoCggEBAOAji+bp+FMJCZICo2kv8RDLYFe5PlUol7UW6iwn
+                IHaJuMYQtxQ1cGosJEKLKHPUwcAo3AMghyCSaQPnKhFQmO1BOPASmscOxyzAORG0
+                6R4ykKvQnpL8wbz+mDO4xBv5SUcVjUYfu+vPcR7FPhXc8Y7vJkZG45n3gzruvxEs
+                22yNIGE4t3hqsMww84XsyigSMG+i7KPfdNFuszTBUn43RsSREjYxjZHufSlIZvNf
+                Y7957mJkmNFtLKbxUJpKEvVtqB8dlwIatHugLbORTQIRWWzUAbtxb2Y7VfsPD59n
+                U/vmtn3lxcduWdLfC77hAT73UhfJqgf7lqj9MyddUBYLO1cCAwEAAaNCMEAwDgYD
+                VR0PAQH/BAQDAgEGMA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0OBBYEFArvpOURIfZB
+                IV+jOrwuDZlq9qO5MA0GCSqGSIb3DQEBCwUAA4IBAQCzcYxZJ78OKqN+4f35m8LY
+                4AIjv+hTnE3MX+FAGi4tB6o6yCyokSE9gv1NMgd5dAeGNCoGmwPOTA8f3QkHfo/L
+                ZXYVGjzAeiUoXfp+f5xyK9Z8+kbxPlifMk0nUIyn/ZlEGVAmYolhL9KAfvex/pTT
+                bJGyL8hoW3eMjHIHSAmfi5tnyPsIws4tLVy8PrOjVauemylkNNwI+eXQ5qxBY48y
+                YmuUF8OY50Phs+GypdT/xFHylpZwtv9UByKNiAOMSQdLH0Y7YCp44aSWilOUEURs
+                SWI3vlESRwvjO7jJakBObpFmhuSq2bb2icYKx4yjnAoojbaud36WJ/U1Voh2Rgks
+                -----END CERTIFICATE-----
+              etcd-manager-ca-events: |
+                -----BEGIN CERTIFICATE-----
+                MIIDCjCCAfKgAwIBAgIMF3NEbXfORPHA+ZUHMA0GCSqGSIb3DQEBCwUAMCExHzAd
+                BgNVBAMTFmV0Y2QtbWFuYWdlci1jYS1ldmVudHMwHhcNMjMwNzE3MTIyNTIyWhcN
+                MzMwNzE2MTIyNTIyWjAhMR8wHQYDVQQDExZldGNkLW1hbmFnZXItY2EtZXZlbnRz
+                MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1c79saG9+PaDGKRKas5+
+                xoFyJ/QtL8ayyF0+AAugSPPTbcci+VUiuc9BvXOK7Q3MGvfw7aKljZ/p0k19PVaZ
+                k5P6p86UXsVhexiJorzXbd/jZ52uonJRuGza0FjfyNYiAeOJxYSXqSN2abZ1hiG4
+                my80lRsRxvLCbeBMpjHs+yTMt+gHo9X3xPhUnW8GGUoX24F4rppyMVXxmOrryU/w
+                Z3SVy5t8KTYlyRJkl9OzVgeu/Bsrb6VIR69tDmrTz/V9nhapCeHvOoDFvwNgWC2t
+                hZz/7gNyHa619wKwbUP5+qVwrW/JKUn1YmcThIJnkuSK216XdIEha32LzenHz+yV
+                RwIDAQABo0IwQDAOBgNVHQ8BAf8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAdBgNV
+                HQ4EFgQUXmNLyjFETk6LRvqyRhY77VxAvLwwDQYJKoZIhvcNAQELBQADggEBAALG
+                GQ9NKnlj4FdXaM9RBEwdZchVPMTz70Zlcr6dpu6Iojbwnqbv7j/Wjugf5fdD+1aV
+                o+sP9bl/oDeM4RIB7vUpDbb6AmfkI2Bh9oBxAzXgzxRjFXjLv1JX2k02R1e+dJ2N
+                kWYxBRHwo9SR6O3hDfdO6ZfPxHndpWwCcohFL/g3Tvg0p82wXe8ACPSdJC1JmBcz
+                4/fhVK6/dQy+fzpjcpcthXKAhhe29d6xwoqvoksfdteI2vfBatV6FfDjhDpoMZVG
+                hzdrgwmLq0/77BT27+QGXKa19QbPY2QYGWki2m3w185CsjU6ZYcvH9cmr3DeA8ZZ
+                2YJWhpK8zxcQ0yeSKms=
+                -----END CERTIFICATE-----
+              etcd-manager-ca-main: |
+                -----BEGIN CERTIFICATE-----
+                MIIDBjCCAe6gAwIBAgIMF3NEbV0W7MUEMovAMA0GCSqGSIb3DQEBCwUAMB8xHTAb
+                BgNVBAMTFGV0Y2QtbWFuYWdlci1jYS1tYWluMB4XDTIzMDcxNzEyMjUyMVoXDTMz
+                MDcxNjEyMjUyMVowHzEdMBsGA1UEAxMUZXRjZC1tYW5hZ2VyLWNhLW1haW4wggEi
+                MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC7/2+jfNtnpSSGEGtnINrTK+mF
+                47IDdcpQiih/bM6Ll9OSG1QH+5BhAnDtVt/XcthQKSUKQmTnOpYCO28TnXI0wZEN
+                cHDAtuoYuSXEN8ZM3mL5Hb6XRmt76E4sxP3kVnu8HdZ+uPviDyTPJ1KhLNN0hjwj
+                pRCoW/iu0q8LEX/jYRX6co6acyhhgQpa7/Z3otVCAT/wiuBNaLbKB3mCXARrKuCU
+                AWQed7obxfEsaOQDYpvYnLuoPMfmqW5n4Z2bJHQLEeFfQfEcDsOKPEkd5gOt9vMp
+                VnOlSbM94H/wy0r2a4R4RuV9KDh5va1XvM3LgvL/y9ObPwmiywfl/i+5VT3PAgMB
+                AAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQW
+                BBS+AIYyG2ywoASPRvbUCZwyNaAouzANBgkqhkiG9w0BAQsFAAOCAQEAgRLrzRh8
+                hTTaPStzlopz6ZLkPQKvxqukkBss8Wtx4LHZy0Tpxl8aQ/KMuWdJsqZc3adni54M
+                8NCGAAVtHmXT3UnSpPYxr5kR59YkKCnloLTo1cTiDhkzPgu4jNNwioh7ZnfEOBsN
+                wSdUC9xzoEAi8y+pgzD7sWpgtRNLHaPcFSM0BI05N5+V7zZzu56CSc1b4vX8U1NE
+                RjJk9iu9tFz9L6Qkgf1g/qhiAESrlq2BFHeYU/MWKDMbqjva9xbZF2EW4CK2a/jN
+                dCwpVgm2/W7BXmgKMNYPXDgsFVEv5ECcVCDwUJHqV4BX7iRA+fKY0U044zFGf4JY
+                VTM4oW8QlggaFg==
+                -----END CERTIFICATE-----
+              etcd-peers-ca-events: |
+                -----BEGIN CERTIFICATE-----
+                MIIDBjCCAe6gAwIBAgIMF3NEbVqkrSxPXdhEMA0GCSqGSIb3DQEBCwUAMB8xHTAb
+                BgNVBAMTFGV0Y2QtcGVlcnMtY2EtZXZlbnRzMB4XDTIzMDcxNzEyMjUyMVoXDTMz
+                MDcxNjEyMjUyMVowHzEdMBsGA1UEAxMUZXRjZC1wZWVycy1jYS1ldmVudHMwggEi
+                MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC6e15Fl31tMK6Gm2E0jjxr9Qa8
+                lFvNtqrbspqydlkmLtJFK/uw33U6siSmzC/TCZZxXVUPri3jnobP3SO0kxZJotdR
+                7MeYQDrwhb548yVFg1xNTYSUugKEmBH/cbmpK6cRZhicKbpQ6MSeYncOpAYvKlXu
+                bOCTmhYL5cZsjiiZJn8jwxo/5BZYZcI8WNa+cMcbWx5o0OyNdnsM8S3V50SryFe6
+                jrtW4un4kjAkoQypckXqz4dOB+fo2CD54KwDglGEqCzT2wuUkSPy+pUZXT9+DgtQ
+                qiRCXu9CYE5i6HVS0AiRVuoNB/yORKI9hslNWHT88iYuh5SEUUQa50RQnrVFAgMB
+                AAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNVHRMBAf8EBTADAQH/MB0GA1UdDgQW
+                BBTgkUHyhsezyZcpF0kMyZACti17ATANBgkqhkiG9w0BAQsFAAOCAQEAjRqsB7+4
+                Z7kvl8UHafoCxGBEanKTopsbttxSxQFbbludqC0+E+kH7C5huGqYAavTsVjjSr5t
+                ssGPTtpv138VvJB5BwOXVgnxsbPS7m/AlXSeseC0l+wNVZd6V7fQfXtTCXTTLkCK
+                DAGNGQaIIw7zkk4T/ABscXIVfavCXkrId5FIBJxSRvAIEO06nV31giLA13rebPlw
+                O/DSvsvIWMuYSxKmRU5FRdKeU25f2rf6r3HXC7n2lNAu1J8gMQtXMecWRZ98GLGd
+                3EAOw/eYVQsUSBADMTZsyENp+HIQ2fKsZPWj920900ieT5SLFYe7SzRHdwKZy1Kr
+                jyHv4m6t7vc9lg==
+                -----END CERTIFICATE-----
+              etcd-peers-ca-main: |
+                -----BEGIN CERTIFICATE-----
+                MIIDAjCCAeqgAwIBAgIMF3NEbVsjNfB6ddP4MA0GCSqGSIb3DQEBCwUAMB0xGzAZ
+                BgNVBAMTEmV0Y2QtcGVlcnMtY2EtbWFpbjAeFw0yMzA3MTcxMjI1MjFaFw0zMzA3
+                MTYxMjI1MjFaMB0xGzAZBgNVBAMTEmV0Y2QtcGVlcnMtY2EtbWFpbjCCASIwDQYJ
+                KoZIhvcNAQEBBQADggEPADCCAQoCggEBAL8lvs+g7Bfs+JdH+QJhfFn6Qw+f+znK
+                iBYqg0wX/yTkMYqipl1zgKoND0X1vKvtFw1ON03j9nYvo42wWPnUr2jHUXUhvTT3
+                CWQLMQRyb36l09w8QRv6h6jARrKzxe4QtE0kDtyGIXPh5igYduG1/UEPcbvVkJ1d
+                hF98ibHB/FkdO/H5BDiy6exTp6Fwd1lul8yDCP+Vp+yD21WU7ZEVe8mJ65HgDcgh
+                kdPtS463I/Wqp9/P/GRiMemW7ReCfyg7Jnk2BZUSaGUlyWB+4TIMjFBzVjYgluZP
+                oUeZHchXTx9Tl/b/Fj6nukwga3InotsyJO3/raGaWXAuS6eXb3lIIBECAwEAAaNC
+                MEAwDgYDVR0PAQH/BAQDAgEGMA8GA1UdEwEB/wQFMAMBAf8wHQYDVR0OBBYEFA+A
+                UtAsIaVZ0YyxMX5weSO9JbP1MA0GCSqGSIb3DQEBCwUAA4IBAQAKeaEj/prAH4r6
+                KdMaxf5CN6S5tdevk9JePRAFLSVOwH05nIGi6zbQc6/KMhiCmiI2+pb9XyYMdcwC
+                XTPU1mpOpdXceRsv6EO0hlzcWgQvDvJYtGfX6tQ4H0Q5TY9/2qYiGcvM12p0em2J
+                nBoBgyf5GTEX1PP7Crikuw33D0HTD+0nwvpO1sPBPm21+LfMnTHce/YpWo8HoCPg
+                qyew1xIJXgAWGxQI+MexWVdnKLa5IoMD655fEIkBOl/zkfddsSbxyoL0TM/IGBOf
+                9YCp9mzhvgIYGD8idbV6pznCQR9sJIPOAt2UDbBWQaVAFD7KpiQYcDU6/uQmiLbR
+                qN3aVLcl
+                -----END CERTIFICATE-----
+              kubernetes-ca: |
+                -----BEGIN CERTIFICATE-----
+                MIIC+DCCAeCgAwIBAgIMF3NEbWAlZCkMha2VMA0GCSqGSIb3DQEBCwUAMBgxFjAU
+                BgNVBAMTDWt1YmVybmV0ZXMtY2EwHhcNMjMwNzE3MTIyNTIxWhcNMzMwNzE2MTIy
+                NTIxWjAYMRYwFAYDVQQDEw1rdWJlcm5ldGVzLWNhMIIBIjANBgkqhkiG9w0BAQEF
+                AAOCAQ8AMIIBCgKCAQEAmDtkKaRyQH54oRAcQFQuEE/XvM8dZNAcTOqo2UwLuvkR
+                5bOx2LkXsypZpr1mhaI5i7RU9FT3dheZNKd8Dy2oxzWFCnNGnx9GvyXc1imrAMoP
+                HXOrpyxjjKkgXHDhGBpb9qliY1IyR5k1NbKw5AOh+0yq6OBESHfE3jyM1ccl4h23
+                29/EjNfbwJrj2CDkyVUZilEo8HDlllwKkivydfdzz9C0On2fL6cQjF8Bg9TC+P/i
+                WOv2iHscpw0OhMC8sX3GgO5mLN74/LqyyjDw4J0gyVLr8X+hCq2YBngJAXDePgeE
+                S5h70bLhtntjvR63J+F9namtW/UrFNTw0vttcWApxQIDAQABo0IwQDAOBgNVHQ8B
+                Af8EBAMCAQYwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUDbAlIiHSRZgRQi3f
+                s63dC8RRsYgwDQYJKoZIhvcNAQELBQADggEBAIPekjNkZsd5izcmLo+pO/W+geOs
+                7StGxV2SdLX0qxGaNj5w8wfVyw1OIpBw17s7/D7IzDrBu7SufS7AukvRqaj5cRAx
+                b9D2565mfXG7ah0u14nt6XEnPuFy+q/Col6CVA4Qu0OZ6Jb/1f5fIutLHi+jBEta
+                NM8sXP3pM3BKFS5TXIU20Jz2eOynvQb5zuSA2JVpDZW2xefLL0HYq6WCnUQR9A+m
+                FFh9+Q14m2e7NOnEL/pmA1SmPxrpMihH6uwE+Gobp0o5SdZHHYmxgTksMnYxaKtu
+                L3cNZ/rTI1NoRksXpbMbIy6Kj8CD+VFsLedeUjeFWqNiWCG/ag64eomHh0A=
+                -----END CERTIFICATE-----
+            ClusterName: paris.nonedns
+            ContainerRuntime: containerd
+            FileAssets:
+            - content: |
+                apiVersion: kubescheduler.config.k8s.io/v1
+                clientConnection:
+                  kubeconfig: /var/lib/kube-scheduler/kubeconfig
+                kind: KubeSchedulerConfiguration
+              path: /var/lib/kube-scheduler/config.yaml
+            Hooks:
+            - null
+            - null
+            KeypairIDs:
+              apiserver-aggregator-ca: "7257504833521355572243260414"
+              etcd-clients-ca: "7257504833103136298114100955"
+              etcd-manager-ca-events: "7257504835395471446808040711"
+              etcd-manager-ca-main: "7257504833470367131914898368"
+              etcd-peers-ca-events: "7257504833294093871392610372"
+              etcd-peers-ca-main: "7257504833329710094576112632"
+              kubernetes-ca: "7257504833690611835222732181"
+              service-account: "7257504833821012212547412538"
+            KubeProxy: null
+            KubeletConfig:
+              anonymousAuth: false
+              cgroupDriver: systemd
+              cgroupRoot: /
+              cloudProvider: external
+              clusterDNS: 100.64.0.10
+              clusterDomain: cluster.local
+              enableDebuggingHandlers: true
+              evictionHard: memory.available<100Mi,nodefs.available<10%,nodefs.inodesFree<5%,imagefs.available<10%,imagefs.inodesFree<5%
+              kubeconfigPath: /var/lib/kubelet/kubeconfig
+              logLevel: 2
+              nodeLabels:
+                kops.k8s.io/kops-controller-pki: ""
+                node-role.kubernetes.io/control-plane: ""
+                node.kubernetes.io/exclude-from-external-load-balancers: ""
+              podInfraContainerImage: registry.k8s.io/pause:3.9
+              podManifestPath: /etc/kubernetes/manifests
+              protectKernelDefaults: true
+              registerSchedulable: true
+              shutdownGracePeriod: 30s
+              shutdownGracePeriodCriticalPods: 10s
+              taints:
+              - node-role.kubernetes.io/control-plane=:NoSchedule
+            KubernetesVersion: 1.27.3
+            Networking:
+              cilium: {}
+              nonMasqueradeCIDR: 100.64.0.0/10
+              serviceClusterIPRange: 100.64.0.0/13
+            UpdatePolicy: automatic
+            channels:
+            - scw://kops-state-store/paris.nonedns/addons/bootstrap-channel.yaml
+            containerdConfig:
+              logLevel: info
+              runc:
+                version: 1.1.7
+              version: 1.7.2
+            docker:
+              skipInstall: true
+            etcdManifests:
+            - scw://kops-state-store/paris.nonedns/manifests/etcd/main-control-plane-fr-par-1.yaml
+            - scw://kops-state-store/paris.nonedns/manifests/etcd/events-control-plane-fr-par-1.yaml
+            images:
+              amd64:
+              - hash: 79fca4b9dcdbdb28cf724ce6c19810e16c43005bb042d74ea4e7b09a295f42dc
+                sources:
+                - https://s3.fr-par.scw.cloud/kops-images/kops/1.28.0-alpha.1/images/kops-utils-cp-amd64.tar.gz
+              - hash: 890b6583162dd725ff0b32bd62ed1b79b8d6964453fca67ff8d6c6281ddfd780
+                sources:
+                - https://s3.fr-par.scw.cloud/kops-images/kops/1.28.0-alpha.1/images/kops-controller-amd64.tar.gz
+              - hash: 111037b67118e9a805a8c5c243d00b98546a99ee63a032bfc37d5d7854fd3aa5
+                sources:
+                - https://s3.fr-par.scw.cloud/kops-images/kops/1.28.0-alpha.1/images/dns-controller-amd64.tar.gz
+              - hash: 71983ddf1026789aa2a0bcbbc42f2aa99362f217e070b56989570958ec01bb14
+                sources:
+                - https://s3.fr-par.scw.cloud/kops-images/kops/1.28.0-alpha.1/images/kube-apiserver-healthcheck-amd64.tar.gz
+            staticManifests:
+            - key: kube-apiserver-healthcheck
+              path: manifests/static/kube-apiserver-healthcheck.yaml
+            usesLegacyGossip: false
+            usesNoneDNS: true
+        EOT
+        id         = "fr-par/kops-state-store/paris.nonedns/igconfig/control-plane/control-plane-fr-par-1/nodeupconfig.yaml"
+        tags       = {}
+        # (5 unchanged attributes hidden)
+    }
+

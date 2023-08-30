@@ -1,0 +1,59 @@
+Plugin: e2e
+Status: passed
+Total: 7069
+Passed: 363
+Failed: 0
+Skipped: 6706
+
+Plugin: systemd-logs
+Status: passed
+Total: 3
+Passed: 3
+Failed: 0
+Skipped: 0
+
+Run Details:
+API Server version: v1.25.5
+Node health: 3/3 (100%)
+Pods health: 26/26 (100%)
+Errors detected in files:
+Errors:
+1445 podlogs/kube-system/kube-controller-manager-control-plane-fr-par-1-0/logs/kube-controller-manager.txt
+1426 podlogs/kube-system/calico-node-d2l9z/logs/calico-node.txt
+1394 podlogs/kube-system/calico-node-2fdxd/logs/calico-node.txt
+ 865 podlogs/sonobuoy/sonobuoy-e2e-job-6932960b933d4a12/logs/e2e.txt
+ 308 podlogs/kube-system/kube-scheduler-control-plane-fr-par-1-0/logs/kube-scheduler.txt
+ 247 podlogs/kube-system/kube-apiserver-control-plane-fr-par-1-0/logs/kube-apiserver.txt
+ 175 podlogs/kube-system/scaleway-cloud-controller-manager-67869c97f-bmdnf/logs/scaleway-cloud-controller-manager.txt
+ 136 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-blcns/logs/csi-attacher.txt
+  89 podlogs/kube-system/kube-proxy-nodes-fr-par-1-0/logs/kube-proxy.txt
+  83 podlogs/kube-system/kube-proxy-nodes-fr-par-1-1/logs/kube-proxy.txt
+  67 podlogs/kube-system/kube-proxy-control-plane-fr-par-1-0/logs/kube-proxy.txt
+  47 podlogs/kube-system/kops-controller-lz2nx/logs/kops-controller.txt
+  37 podlogs/kube-system/dns-controller-56b8b99d88-n6xws/logs/dns-controller.txt
+  14 podlogs/kube-system/calico-node-g5vvc/logs/calico-node.txt
+   4 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-blcns/logs/csi-provisioner.txt
+   4 podlogs/kube-system/etcd-manager-main-control-plane-fr-par-1-0/logs/etcd-manager.txt
+   4 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-blcns/logs/scaleway-csi-plugin.txt
+   4 podlogs/kube-system/etcd-manager-events-control-plane-fr-par-1-0/logs/etcd-manager.txt
+   3 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-blcns/logs/csi-snapshotter.txt
+   2 podlogs/kube-system/calico-kube-controllers-7bc879d8d6-f7whk/logs/calico-kube-controllers.txt
+   1 podlogs/kube-system/scaleway-csi-node-wbxb5/logs/csi-node-driver-registrar.txt
+   1 podlogs/kube-system/scaleway-csi-node-fjgnv/logs/csi-node-driver-registrar.txt
+Warnings:
+3377 podlogs/kube-system/etcd-manager-main-control-plane-fr-par-1-0/logs/etcd-manager.txt
+ 765 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-blcns/logs/csi-resizer.txt
+ 644 podlogs/kube-system/kube-controller-manager-control-plane-fr-par-1-0/logs/kube-controller-manager.txt
+ 137 podlogs/kube-system/kube-scheduler-control-plane-fr-par-1-0/logs/kube-scheduler.txt
+ 110 podlogs/kube-system/kube-apiserver-control-plane-fr-par-1-0/logs/kube-apiserver.txt
+  58 podlogs/kube-system/etcd-manager-events-control-plane-fr-par-1-0/logs/etcd-manager.txt
+  32 podlogs/kube-system/kube-proxy-nodes-fr-par-1-0/logs/kube-proxy.txt
+  31 podlogs/sonobuoy/sonobuoy-e2e-job-6932960b933d4a12/logs/e2e.txt
+  29 podlogs/kube-system/kube-proxy-nodes-fr-par-1-1/logs/kube-proxy.txt
+  22 podlogs/kube-system/kube-proxy-control-plane-fr-par-1-0/logs/kube-proxy.txt
+  10 podlogs/kube-system/scaleway-cloud-controller-manager-67869c97f-bmdnf/logs/scaleway-cloud-controller-manager.txt
+   3 podlogs/kube-system/calico-node-g5vvc/logs/calico-node.txt
+   3 podlogs/kube-system/calico-node-d2l9z/logs/calico-node.txt
+   1 podlogs/kube-system/scaleway-csi-controller-6b9b84b6f8-blcns/logs/csi-provisioner.txt
+   1 podlogs/kube-system/calico-kube-controllers-7bc879d8d6-f7whk/logs/calico-kube-controllers.txt
+   1 podlogs/sonobuoy/sonobuoy/logs/kube-sonobuoy.txt
